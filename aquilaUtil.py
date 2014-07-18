@@ -1,7 +1,7 @@
 import requests
 
 tagList = [ "h1", "h2", "h3", "h4", "h5", "h6", "p", "a",
-       "article", "body", "code", "embed", "img", "meta"] 
+       "article", "body", "code", "embed", "img", "meta","script"] 
 # list of HTML tags that we care about right now
 
 def extract(inString,start,end):
@@ -18,7 +18,7 @@ class WebPage(object): #The object representing a single webpage
   
   def __init__(self,link):
     self.URL = link 
-    self.site = self._getSite()
+    self.site = self._getSite() # get the site the page belongs to
     self.HTTPresponse = requests.get(link) #Hold a requests.response object
                                            # in order to keep all the data 
 
@@ -69,6 +69,29 @@ class WebPage(object): #The object representing a single webpage
       elif link.startswith('/'):
         self.siteLinks.append(self.site+link)
   
+  def getPlainText(self):
+    count = 0
+    indexA = []
+    indexB = []
+    text = self.HTTPresponse.text
+    jscript = extract(self.HTTPresponse.text,"<script>","</script>")
+    for j in jscript:
+      text = text.replace(j,"")
+  
+    for char in self.HTTPresponse.text:
+      if char == "<":
+        indexA.append(count)
+      if char == ">":
+        indexB.append(count+1)
+      
+      count += 1
+    
+    for i in xrange(len(indexA)):
+      text = text.replace(self.HTTPresponse.text[indexA[i]:indexB[i]],"")
+    self.plainText = text
+
+    
+          
       
 
 
