@@ -52,6 +52,7 @@ class WebPage(object): #The object representing a single webpage
     self.content[tag] = self._extractText(tag,self.HTTPresponse.text)
 
   def getLinks(self):
+    #shove all the links in the correct lists based on their prefixes
     linkList = []
     for linkSite in self.content["a"]:
       if 'href="' in linkSite:
@@ -70,6 +71,8 @@ class WebPage(object): #The object representing a single webpage
         self.siteLinks.append(self.site+link)
   
   def getPlainText(self):
+    #fetch all the text that isn't HTML by removing the javascript and 
+    #getting everything that isn't in angle brackets
     count = 0
     indexA = []
     indexB = []
