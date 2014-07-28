@@ -133,7 +133,7 @@ def crawl(URL,term):
         crawled.append(URL)
 
     except Exception as e:
-      self.errors.append(e)
+      errors.append(e)
       
             
 
