@@ -1,4 +1,4 @@
-import requests
+import requests,time,random
 
 tagList = [ "h1", "h2", "h3", "h4", "h5", "h6", "p", "a",
        "article", "body", "code", "embed", "img", "meta","script"] 
@@ -24,7 +24,7 @@ class WebPage(object): #The object representing a single webpage
 
     self.content = {} #Dictionary to map HTML tag strings to lists of 
                       # corresponding page content       
-    self.siteLinks = [] # a list on site links on the webpage
+    self.internalLinks = [] # a list on site links on the webpage
     self.onPageLinks = [] # on page links.... 
     self.externalLinks = [] # links to the outside world
   
@@ -53,6 +53,7 @@ class WebPage(object): #The object representing a single webpage
 
   def getLinks(self):
     #shove all the links in the correct lists based on their prefixes
+    self.getContent("a") 
     linkList = []
     for linkSite in self.content["a"]:
       if 'href="' in linkSite:
@@ -68,11 +69,14 @@ class WebPage(object): #The object representing a single webpage
         self.externalLinks.append("http:"+link)
       
       elif link.startswith('/'):
-        self.siteLinks.append(self.site+link)
-  
+        self.internalLinks.append(self.site+link)
+  def getHTML(self):
+    self.HTML = self.HTTPresponse.text 
+ 
   def getPlainText(self):
     #fetch all the text that isn't HTML by removing the javascript and 
     #getting everything that isn't in angle brackets
+    #more reasonable implementation coming soon
     count = 0
     indexA = []
     indexB = []
@@ -93,8 +97,44 @@ class WebPage(object): #The object representing a single webpage
       text = text.replace(self.HTTPresponse.text[indexA[i]:indexB[i]],"")
     self.plainText = text
 
-    
+frontier = []
+crawled = []
+pages = []
+errors = []
+docLinks = []
+docTerms = [".doc",".xls",".pdf"]
+searchTerms = {}
+
+
+def crawl(URL,term):
+    #cursory crawl function, practically deprecated already
+    for thing in docTerms:
+      if thing in URL:
+        docLinks.append(URL)
+        return 
+    try:
+      page = WebPage(URL)
+      page.getLinks()
+      for link in page.internalLinks:
+        if link not in crawled and link not in frontier:
+          frontier.append(link)
           
+      try:
+        page.getPlainText()
+        print "got plainText for" + URL
+        if term in page.plainText:
+          pages.append(URL)
+        crawled.append(URL)
+      except:
+        page.getHTML()
+        print "got HTML for" + URL
+        if term in page.HTML:
+          pages.append(URL)
+        crawled.append(URL)
+
+    except Exception as e:
+      self.errors.append(e)
       
+            
 
-
+         
