@@ -1,8 +1,28 @@
-import requests,time,random
+import requests,time,random,socket,struct 
 
 tagList = [ "h1", "h2", "h3", "h4", "h5", "h6", "p", "a",
        "article", "body", "code", "embed", "img", "meta","script"] 
 # list of HTML tags that we care about right now
+
+packer = struct.Struct('!L') #packer to pack/unpack data for send/recv functions
+
+def recv(connection):
+  #receive via Python socket, receives and unpacks "packed" binary data
+  msg = ""
+  msgLen = packer.unpack(connection.recv(4))[0]
+  while len(msg) < msgLen:
+     msg += connection.recv(msgLen-len(msg))
+    return msg
+
+def send(connection, message):
+  #send function, works with receive 
+  totalSent = 0
+  msgLen = len(message)
+  packed_msgLen = packer.pack(msgLen)
+  connection.send(packed_msgLen)
+  while totalSent < msgLen:
+    sent = connection.send(message[totalSent:])
+    totalSent += sent
 
 def extract(inString,start,end):
        a = inString.partition(start)
