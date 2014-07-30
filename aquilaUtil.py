@@ -12,7 +12,7 @@ def recv(connection):
   msgLen = packer.unpack(connection.recv(4))[0]
   while len(msg) < msgLen:
      msg += connection.recv(msgLen-len(msg))
-    return msg
+  return msg
 
 def send(connection, message):
   #send function, works with receive 
