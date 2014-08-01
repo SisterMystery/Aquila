@@ -1,5 +1,6 @@
 from aquilaUtil import * 
-import threading, random, time, mimetypes 
+import random, time, mimetypes 
+
 
 
 class crawlMaster(object):
@@ -7,18 +8,21 @@ class crawlMaster(object):
   #spawns local threads and accepts requests via crawler calls to 
   # master methods. Also remote crawlers... later
 	def __init__(self,searchDict,port = 9013):
+		#self.sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 		self.searchTerms = searchDict
 		self.errors = []
 		self.inProgress = [] # list of urls being crawled/read
 		self.results = []
 		self.frontier = []
 		self.crawled = [] 
-		self.req_queue = []  
+		self.req_queue = [] #lists with function string followed by arguments  
 		self.port = port
-		self.commands = { } # list of commands mapping Strings to functions
+		self.commandPort = port +1
+		self.commands = {"GTURL":self.grantURLs,"APPDTO":self.appendTo, "SSTERMS":self.sendSearchTerms } # list of commands mapping Strings to functions
+		
 		self.lists = {"CRAWLED":self.crawled,"ERRORS":self.errors,"RESULTS":self.results,
-				"FRONTIER":self.frontier,"REQS":self.req_queue } #remember to update this list
-
+				"FRONTIER":self.frontier,"REQS":self.req_queue } #remember to update this list		
+	
 	def checkTime(self):
 		#check timestamps on in progress
 		pass
@@ -28,12 +32,41 @@ class crawlMaster(object):
 		#request a list via liststring
 		pass
 
-	def grantURLs(self,crawler,frontierBit):
+	def grantURLs(self,crawler):
 		pass
-  
+
+	def dequeue(self):
+		print "dequeuing"
+		msgList = self.req_queue.pop(0)
+		try:
+			if len(msgList) > 1:
+				self.commands[msgList[0]](msgList[1:])
+			else:
+				self.commands[msgList[0]]()
+
+		except Exception as e:
+			print e 
+			self.errors.append(e)
+
+	@enthread
 	def listen(self):
+		sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+		sock.bind(('',self.port))
+		
+		while(1):
+			msg = 0
+			sock.listen(1)
+			conn,addr = sock.accept()
+			msg = recv(conn)	
+			conn.close()
+			if(msg): 
+				msg = msg.split(",")
+				msg.append(addr)
+				self.req_queue.append(msg)
+
+
 		#queue command and arguments as a tuple in req_queue
-		pass
+	
 	
 	def stopCrawler(self,crawler):
 		pass
@@ -45,6 +78,8 @@ class crawlMaster(object):
 		pass
 	
 	def sendSearchTerms(self, crawler):
+		#send the search term dictionary to the crawler requesting it
+		print "THIS PART WORKS"		
 		pass
 		
 """
@@ -58,14 +93,17 @@ class remoteCrawler(object):
 		#self.thread = threading.Thread(target=beginCrawl) # crawler's own personal thread
 		self.masterIP = masterIP
 		self.port = masterPort
+		#self.sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM) #don't forget we might need a socket lock. heh sock-lock
 		self.mimes = []
 		self.errors = [] 
 		self.frontier = []
 		self.newLinks = [] 
+		self.req_queue = []
 		self.results = [] # list of urls w/ their score 
-		self.commands = { } # list of commands mapping Strings to functions
+		self.commands = {"GETSTERMS":self.getSearchTerms } # list of commands mapping Strings to functions
 		self.cache = [] # list of webpage objects
 		self.lists = {"MIMES":self.mimes,"ERRORS":self.errors,"LINKS":self.newLinks,"RESULTS":self.results}
+
 	def crawl(self):
 		if not self.frontier: #check if frontier is empty, if so do nothing
 			print "empty frontier"
@@ -110,9 +148,39 @@ class remoteCrawler(object):
 			except Exception as e:
 				self.errors.append(e)
 				return
+
+
+	def dequeue(self):
+		print "dequeuing"
+		msgList = self.req_queue.pop(0)
 		
-		
+		if len(msgList) > 1:
+			self.commands[msgList[0]](msgList[1:])
+		else:
+			self.commands[msgList[0]]()
+			
 	
+	@enthread
+	def listen(self):
+		sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+		sock.bind(('',self.port+1))
+		
+		while(1):
+			
+			msg = 0
+			sock.listen(1)
+			conn,addr = sock.accept()
+			msg = recv(conn)	
+			conn.close()
+			if(msg): 
+				msg = msg.split(",")
+				self.req_queue.append(msg)			
+	
+	def getSearchTerms(self,termString):
+			terms = termString.split(",")
+			for i in range(0,len(terms),2):
+				self.searchTerms[terms[i]] = terms[i+1]
+
 	def cachePage(self,page):
 		pass 	
 	
@@ -123,10 +191,16 @@ class remoteCrawler(object):
 				score += self.searchTerms[term]
 		return score
 		
-
-	def requestURLs(self):
-		pass
-  
+	def req(self,streq):
+		sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+		#socklock
+		sock.connect((self.masterIP,self.port))
+		send(sock, streq)
+		#data = recv(self.socket)
+		sock.close()
+		#socklock
+		#data = data.split(",")
+	  
 	def returnList(self,listString):
 		pass
 
@@ -137,10 +211,7 @@ class remoteCrawler(object):
 
 	def stop(self):
 		pass
-
-"""
-fox = remoteCrawler('',9013)
-fox.searchTerms["red"] = 5
-fox.frontier.append("http://en.wikipedia.org/wiki/Random")
-fox.crawl()
- """
+#############
+# Consider a network comm object of some sort with
+# listen, req, etc methods
+############

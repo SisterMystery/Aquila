@@ -1,10 +1,18 @@
-import requests,time,random,socket,struct 
+import requests,time,random,socket,struct,threading 
 
 tagList = [ "h1", "h2", "h3", "h4", "h5", "h6", "p", "a",
        "article", "body", "code", "embed", "img", "meta","script"] 
 # list of HTML tags that we care about right now
 
 packer = struct.Struct('!L') #packer to pack/unpack data for send/recv functions
+
+def enthread(func):
+		def threadedFunc(*argsLst):
+			t = threading.Thread(target=func, args=argsLst)
+			t.daemon = True
+			t.start()
+			return
+		return threadedFunc
 
 def recv(connection):
   #receive via Python socket, receives and unpacks "packed" binary data
