@@ -40,7 +40,56 @@ def extract(inString,start,end):
        else:
                return []
   
-
+#class command_req(object): # you know, just a command object to hold command, args, origin
+#	def __init__(self,funcString,arglist,originAddr):
+		
+class commObj(object):
+	#class representing one of our network objects
+	# has a queue of requests which it dequeues and calls
+	def __init__(self):
+		self.req_queue = []
+	
+	@enthread
+	def startDQ(self):
+		#just for now, will make a real method later
+		while 1:
+			if self.req_queue:
+				self.dequeue()
+	
+	def dequeue(self):
+		print "dequeuing"
+		msgList = self.req_queue.pop(0)
+		
+		if len(msgList) > 1:
+			self.commands[msgList[0]](msgList[1:])
+		else:
+			self.commands[msgList[0]]()
+			
+	def req(self,streq,addr,port):
+		print "sending ==> " +streq 
+		sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+		sock.connect((addr,port)) 
+		send(sock, streq)
+		sock.close()
+	
+	@enthread
+	def listen(self,port):
+		sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		sock.bind(('',port))
+		
+		while(1):
+			
+			msg = 0
+			sock.listen(1)
+			conn,addr = sock.accept()
+			msg = recv(conn)	
+			conn.close()
+			print "received ==> " + msg 
+			if(msg): 
+				msg = msg.split(",")
+				msg.append(addr[0])
+				self.req_queue.append(msg)	
 
 class WebPage(object): #The object representing a single webpage
   
@@ -125,44 +174,5 @@ class WebPage(object): #The object representing a single webpage
       text = text.replace(self.HTTPresponse.text[indexA[i]:indexB[i]],"")
     self.plainText = text
 
-frontier = []
-crawled = []
-pages = []
-errors = []
-docLinks = []
-docTerms = [".doc",".xls",".pdf"]
-searchTerms = {}
-
-
-def crawl(URL,term):
-    #cursory crawl function, practically deprecated already
-    for thing in docTerms:
-      if thing in URL:
-        docLinks.append(URL)
-        return 
-    try:
-      page = WebPage(URL)
-      page.getLinks()
-      for link in page.internalLinks:
-        if link not in crawled and link not in frontier:
-          frontier.append(link)
-          
-      try:
-        page.getPlainText()
-        print "got plainText for" + URL
-        if term in page.plainText:
-          pages.append(URL)
-        crawled.append(URL)
-      except:
-        page.getHTML()
-        print "got HTML for" + URL
-        if term in page.HTML:
-          pages.append(URL)
-        crawled.append(URL)
-
-    except Exception as e:
-      errors.append(e)
-      
-            
 
          
