@@ -52,20 +52,26 @@ class commObj(object):
 	@enthread
 	def startDQ(self):
 		#just for now, will make a real method later
+    # loop forever, calling functions in the req_queue
 		while 1:
 			if self.req_queue:
 				self.dequeue()
 	
 	def dequeue(self):
-		print "dequeuing"
-		msgList = self.req_queue.pop(0)
-		
-		if len(msgList) > 1:
-			self.commands[msgList[0]](msgList[1:])
+    #remove things from the req_queue and call them
+		msgList = self.req_queue.pop(0) # pop the function name string
+		print "dequeuing  " + msgList[0]
+		if len(msgList) > 1: # if it has arguments also
+     
+			self.commands[msgList[0]](msgList[1:]) # call the function by accessing the dictionary
+                                            #  that maps strings to functions with the rest
+                                            # of the list (list of arguments) as argument
 		else:
 			self.commands[msgList[0]]()
 			
 	def req(self,streq,addr,port):
+    #make a request to do something
+    
 		print "sending ==> " +streq 
 		sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 		sock.connect((addr,port)) 
