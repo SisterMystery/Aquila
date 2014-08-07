@@ -13,12 +13,14 @@ class crawlMaster(commObj):
     self.searchTerms = searchDict
     self.errors = []
     self.inProgress = [] # list of urls being crawled/read
-    self.results = []
+    self.crawlers = [] # this is mostly here for testing 
+    self.results = {}
     self.frontier = []
+    self.crawlers = [] # for testing 
     self.crawled = [] 
     self.inPort = port
     self.outPort = port +1
-    self.commands = {"GTURL":self.grantURLs,"APPDTO":self.appendTo, "SSTERMS":self.sendSearchTerms } # list of commands mapping Strings to functions
+    self.commands = {"GTRESULTS":self.getResults,"GTURL":self.grantURLs,"APPDTO":self.appendTo, "SSTERMS":self.sendSearchTerms } # list of commands mapping Strings to functions
     
     self.lists = {"CRAWLED":self.crawled,"ERRORS":self.errors,"RESULTS":self.results,
         "FRONTIER":self.frontier,"REQS":self.req_queue } #remember to update this list    
@@ -27,41 +29,57 @@ class crawlMaster(commObj):
     #check timestamps on in progress
     pass
   
-  def get(self,target,listString):
-    #connect to target master
-    #request a list via liststring
-    pass
+  def getResults(self,termList):
+    # get search terms that we requested 
+    addr = termList.pop() 
+    for i in range(0,len(termList),2):
+        self.results[termList[i]] = int(termList[i+1])
 
   def grantURLs(self,inList):
     #respond to a request from a crawler with urls
     addr = inList.pop() 
     
     outList = []    
-    for i in range(5): 
+    for i in range(len(self.frontier)/3+1): 
       #five times (for now) pop a random url from the frontier to send
       if self.frontier:
         outList.append(self.frontier.pop(random.randint(0,len(self.frontier)-1)))
-    # send the GTURL req, we may be sending an empty list if our frontier is empty
-    self.req("GTURL"+","+",".join(outList),addr,self.outPort)
+      else:
+        return
+      self.req("GTURL"+","+",".join(outList),addr,self.outPort)
 
   def startCrawler(self,crawlerIP):
     self.req("START",crawlerIP,self.outPort)
 
   def stopCrawler(self,crawlerIP):
-    self.req("START",crawlerIP,self.outPort)
-  
+    self.req("STOP",crawlerIP,self.outPort)
+ 
+  def startAll(self):
+    for ip in self.crawlers:
+      self.startCrawler(ip)
+
+
+  def stopAll(self):
+    for ip in self.crawlers:
+      self.stopCrawler(ip)
+
+   
   def appendTo(self,inList):
     #callable over the network, append to a given local list
     addr = inList.pop() # pop the string key of the list to append to
     targetList = self.lists[inList.pop(0)]    
     for i in inList:
-      if i not in targetList:
+      if i not in targetList and i not in self.crawled:
         targetList.append(i)
           
 
   def sendSearchTerms(self, arglist):
       #respond to a request for search terms
       crawlerAddr = arglist[0]
+      
+      if crawlerAddr not in self.crawlers:
+        self.crawlers.append(crawlerAddr)
+
       dictList = []
       for i in self.searchTerms:
         dictList.append(i)
@@ -86,7 +104,7 @@ class remoteCrawler(commObj):
     self.frontier = []
     self.crawled = []
     self.newLinks = [] 
-    self.results = [] # list of urls w/ their score 
+    self.results = {} # dictionary of urls w/ their score 
     self.commands = {"GETSTERMS":self.getSearchTerms,"START":self.startCrawl,
       "STOP":self.stop,"GTURL":self.getURLs } # list of commands mapping Strings to functions
     
@@ -178,12 +196,15 @@ class remoteCrawler(commObj):
     listString = 'APPDTO'+','+destList+','+','.join(inList) #maybe do the efficiency thing to make this not a "+" op
     self.req(listString,self.masterIP,self.outPort)
 
-  def sendResults(self,dest,toSend):
+  def sendResults(self, arglist):
+      #generalize this as a send/receive dict funct-pair
       dictList = []
-      for i in toSend:
-        dictList.append(i[0])
-        dictList.append(str(i[1]))
-      self.sendList(dest,dictList)      
+      for i in self.results:
+        dictList.append(i)
+        dictList.append(str(self.searchTerms[i]))
+      self.req("GTRESULTS,"+','.join(dictList),self.masterIP,self.outPort)
+
+
 
   def makeMaster(self):
     #newMaster = crawlMaster(self.searchTerms,self.port)
@@ -195,7 +216,6 @@ class remoteCrawler(commObj):
     self.crawling = True
     print "starting the crawl"
     while self.crawling:
-       
       #cursory startCrawl
       #Very cursory!!!  
       if len(self.crawled) > 20:
@@ -208,11 +228,11 @@ class remoteCrawler(commObj):
         self.newLinks = []
  
       if self.results:
-          self.sendResults("RESULTS",self.results)
+          self.sendResults(self.results)
           self.results = [] 
-      if len(self.frontier) < 1:
+      if len(self.frontier) < 3:
         self.req("GTURL",self.masterIP,self.outPort)
-
+        time.sleep(4)
     
       if self.frontier:
           print "going to sleep"
