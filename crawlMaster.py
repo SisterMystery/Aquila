@@ -17,6 +17,7 @@ class crawlMaster(commObj):
     self.results = {}
     self.frontier = []
     self.crawlers = [] # for testing 
+    self.reCrawled = [] # temportary, for debugging
     self.crawled = [] 
     self.inPort = port
     self.outPort = port +1
@@ -71,6 +72,8 @@ class crawlMaster(commObj):
     for i in inList:
       if i not in targetList and i not in self.crawled:
         targetList.append(i)
+      elif targetList == "CRAWLED":
+        self.reCrawled.append(i)
           
 
   def sendSearchTerms(self, arglist):
@@ -89,7 +92,7 @@ class crawlMaster(commObj):
 
 class remoteCrawler(commObj):   
   
-  def __init__(self,masterIP,masterPort):
+  def __init__(self,masterIP,masterPort=9013):
     commObj.__init__(self)
     self.searchTerms = {} #dictionary of search terms 
     #self.thread = threading.Thread(target=beginCrawl) # crawler's own personal thread
@@ -108,7 +111,7 @@ class remoteCrawler(commObj):
     self.commands = {"GETSTERMS":self.getSearchTerms,"START":self.startCrawl,
       "STOP":self.stop,"GTURL":self.getURLs } # list of commands mapping Strings to functions
     
-    self.cache = [] # list of webpage objects
+    self.cache = {} # list of webpage objects
     self.lists = {"MIMES":self.mimes,"ERRORS":self.errors,"LINKS":self.newLinks,"RESULTS":self.results}
     
 
@@ -135,7 +138,7 @@ class remoteCrawler(commObj):
       page = WebPage(url) #try downloading the page!
       page.getLinks() # and ripping some links (+ getContenting "a")
       for link in page.internalLinks:
-        if link != url:
+        if link != url and link not in self.cache: # added for testing 
               self.newLinks.append(link)
       
     except Exception as e:
@@ -182,7 +185,17 @@ class remoteCrawler(commObj):
         self.searchTerms[termList[i]] = int(termList[i+1])
   
   def cachePage(self,page):
-    pass  
+    #update a cache to keep from re-sending common links to the master 
+    if page not in self.cache:
+      self.cache[page] = 1
+    else:
+      self.cache[page] += 1 
+
+  def cleanCache(self):
+    for key in self.cache:
+      self.cache[key] -= .5
+      if self.cache[key] <= 0: del self.cache[key] 
+
   
   def score(self,pageText):
     score = 0
@@ -223,6 +236,7 @@ class remoteCrawler(commObj):
         self.crawled = []
       if self.newLinks:
         for i in range(len(self.newLinks)-1):
+          self.cachePage(self.newLinks[i]) # for testing
           self.newLinks[i] = self.newLinks[i].encode('ascii', 'xmlcharrefreplace')
         self.sendList("FRONTIER",self.newLinks)
         self.newLinks = []
@@ -233,7 +247,9 @@ class remoteCrawler(commObj):
       if len(self.frontier) < 3:
         self.req("GTURL",self.masterIP,self.outPort)
         time.sleep(4)
-    
+      
+      self.cleanCache() # also for testing 
+      
       if self.frontier:
           print "going to sleep"
           time.sleep(5)
