@@ -16,6 +16,7 @@ class crawlMaster(commObj):
     self.crawlers = [] # this is mostly here for testing 
     self.results = {}
     self.frontier = []
+    self.junk = [] # even more testing
     self.crawlers = [] # for testing 
     self.reCrawled = [] # temportary, for debugging
     self.crawled = [] 
@@ -72,9 +73,8 @@ class crawlMaster(commObj):
     for i in inList:
       if i not in targetList and i not in self.crawled:
         targetList.append(i)
-      elif targetList == "CRAWLED":
-        self.reCrawled.append(i)
-          
+      else:
+        self.junk.append((targetList,i))    
 
   def sendSearchTerms(self, arglist):
       #respond to a request for search terms
@@ -138,7 +138,7 @@ class remoteCrawler(commObj):
       page = WebPage(url) #try downloading the page!
       page.getLinks() # and ripping some links (+ getContenting "a")
       for link in page.internalLinks:
-        if link != url and link not in self.cache: # added for testing 
+        if link != url and link not in self.cache: # added the cache for testing 
               self.newLinks.append(link)
       
     except Exception as e:
