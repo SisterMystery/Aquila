@@ -1,8 +1,8 @@
 from crawlMaster import * 
 
-foxM = crawlMaster({"C++":1, "Python": 2, "python":2,"Scala":2,"scala":2})
+foxM = crawlMaster({"fox":1, "Torrent": 2, "Cencini":2,"Davis-Goff":2,"Espada":2})
 foxM.listen(foxM.inPort)
 foxM.startDQ()
-foxM.frontier.append("http://www.internships.com/student")
+foxM.frontier.append("http://www.bennington.edu")
 
 

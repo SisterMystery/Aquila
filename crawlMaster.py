@@ -15,17 +15,26 @@ class crawlMaster(commObj):
     self.inProgress = [] # list of urls being crawled/read
     self.crawlers = [] # this is mostly here for testing 
     self.results = {}
+    self.junk = [] 
     self.frontier = []
-    self.junk = [] # even more testing
     self.crawlers = [] # for testing 
-    self.reCrawled = [] # temportary, for debugging
     self.crawled = [] 
+    self.crawlCount = 0
     self.inPort = port
     self.outPort = port +1
-    self.commands = {"GTRESULTS":self.getResults,"GTURL":self.grantURLs,"APPDTO":self.appendTo, "SSTERMS":self.sendSearchTerms } # list of commands mapping Strings to functions
     
-    self.lists = {"CRAWLED":self.crawled,"ERRORS":self.errors,"RESULTS":self.results,
-        "FRONTIER":self.frontier,"REQS":self.req_queue } #remember to update this list    
+    self.commands = {
+    "GTRESULTS":self.getResults,
+    "GTURL":self.grantURLs,
+    "APPDTO":self.appendTo, 
+    "SSTERMS":self.sendSearchTerms } # list of commands mapping Strings to functions
+    
+    self.lists = {
+    "CRAWLED":self.crawled,
+    "ERRORS":self.errors,
+    "RESULTS":self.results,
+    "FRONTIER":self.frontier,
+    "REQS":self.req_queue } #remember to update this list    
   
   def checkTime(self):
     #check timestamps on in progress
@@ -38,17 +47,22 @@ class crawlMaster(commObj):
         self.results[termList[i]] = int(termList[i+1])
 
   def grantURLs(self,inList):
-    #respond to a request from a crawler with urls
-    addr = inList.pop() 
-    
-    outList = []    
-    for i in range(len(self.frontier)/3+1): 
-      #five times (for now) pop a random url from the frontier to send
-      if self.frontier:
-        outList.append(self.frontier.pop(random.randint(0,len(self.frontier)-1)))
-      else:
-        return
-      self.req("GTURL"+","+",".join(outList),addr,self.outPort)
+    addr = inList.pop()
+
+    if not self.frontier: 
+      #if the frontier is empty re-append the request to the queue
+      self.req_queue.append(["GTURL",addr])
+      time.sleep(1)
+      return
+
+    outList = [] 
+    i = 0
+    while self.frontier and i < 10: 
+      outList.append(self.frontier.pop())      
+      i += 1
+
+    self.inProgress += outList # add all the outbound urls to the inProgress list
+    self.req("GTURL"+","+",".join(outList),addr,self.outPort)
 
   def startCrawler(self,crawlerIP):
     self.req("START",crawlerIP,self.outPort)
@@ -60,31 +74,37 @@ class crawlMaster(commObj):
     for ip in self.crawlers:
       self.startCrawler(ip)
 
-
   def stopAll(self):
     for ip in self.crawlers:
       self.stopCrawler(ip)
 
-   
   def appendTo(self,inList):
     #callable over the network, append to a given local list
-    addr = inList.pop() # pop the string key of the list to append to
-    targetList = self.lists[inList.pop(0)]    
-    for i in inList:
-      if i not in targetList and i not in self.crawled:
-        targetList.append(i)
-      else:
-        self.junk.append((targetList,i))    
+    addr = inList.pop() # pop the sender's address
+    listStr = inList.pop(0)  # pop the list dictionary key
+    targetList = self.lists[listStr]    
+    
+    if listStr == "CRAWLED":
+      self.crawlCount += 1 # to compare to how many crawled urls are new
+      for url in inList:
+        if url in self.inProgress:
+           print "out of progress " , url
+           self.inProgress.remove(url)
+
+    for url in inList:    
+      targetList.append(url)
+      # the list will need to be filtered for duplicates elsewhere. 
+      self.junk.append((listStr,url))    
+    
 
   def sendSearchTerms(self, arglist):
       #respond to a request for search terms
-      crawlerAddr = arglist[0]
-      
-      if crawlerAddr not in self.crawlers:
-        self.crawlers.append(crawlerAddr)
+      crawlerAddr = arglist[0] # pop crawler addr
+      if crawlerAddr not in self.crawlers: # and add the crawler to a list 
+        self.crawlers.append(crawlerAddr)  # of known crawlers. 
 
       dictList = []
-      for i in self.searchTerms:
+      for i in self.searchTerms: # deconstruct the dictionary into a string w/commas
         dictList.append(i)
         dictList.append(str(self.searchTerms[i]))
       self.req("GETSTERMS,"+','.join(dictList),crawlerAddr,self.outPort)
@@ -103,45 +123,56 @@ class remoteCrawler(commObj):
     self.mimes = []
     self.m_list = ['.pdf','.xls']
     self.crawling = False
+    self.req_pending = False
     self.errors = [] 
     self.frontier = []
     self.crawled = []
     self.newLinks = [] 
     self.results = {} # dictionary of urls w/ their score 
-    self.commands = {"GETSTERMS":self.getSearchTerms,"START":self.startCrawl,
-      "STOP":self.stop,"GTURL":self.getURLs } # list of commands mapping Strings to functions
+
+    self.commands = {
+    "GETSTERMS":self.getSearchTerms,
+    "START":self.startCrawl,
+    "STOP":self.stop,
+    "GTURL":self.getURLs } # list of commands mapping Strings to functions
     
     self.cache = {} # list of webpage objects
-    self.lists = {"MIMES":self.mimes,"ERRORS":self.errors,"LINKS":self.newLinks,"RESULTS":self.results}
+    self.lists = {
+    "MIMES":self.mimes,
+    "ERRORS":self.errors,
+    "LINKS":self.newLinks,
+    "RESULTS":self.results}
     
 
   def crawl(self):
-  
     if not self.frontier: #check if frontier is empty, if so do nothing
       print "empty frontier"
       return 
    
-    url = self.frontier.pop(random.randint(0,len(self.frontier)-1)) #pop a url from our frontier
-    url = url.encode('ascii', 'xmlcharrefreplace') # i'm not sure if this is even what we want, but it's a temporary fix for the em dash problem
-    m_type = mimetypes.guess_type(url,strict=False) #guess the mimetype ==> THIS DOESN'T WORK
+    url = self.frontier.pop() # pop a url from our frontier
+    url = url.encode('ascii', 'xmlcharrefreplace') # i'm not sure if this is even 
+                                                  #what we want, but it's a temporary fix
+                                                  #for the em dash problem
+
+    m_type = mimetypes.guess_type(url,strict=False) #guess the mimetype ==> THIS APPARENTLY  DOESN'T WORK
     
     if m_type[0] or m_type[1]: 
       self.mimes.append(url) # Append the url to the internet media box
       return
-    #just to filter for now until a better option is implemented
-    for i in self.m_list:
+
+    for i in self.m_list: #just to filter for now until a better option is implemented
       if i in url:
         self.mimes.append(url)
         return 
-      
+    
     try:
       page = WebPage(url) #try downloading the page!
-      page.getLinks() # and ripping some links (+ getContenting "a")
+      page.getLinks() # and ripping some links (w/  getContent("a"))
       for link in page.internalLinks:
-        if link != url and link not in self.cache: # added the cache for testing 
+        if link != url and link not in self.frontier and link not in self.cache: 
               self.newLinks.append(link)
       
-    except Exception as e:
+    except Exception as e: #we'll actually handle some errors here one day
       self.errors.append(e)
       return
 
@@ -151,7 +182,7 @@ class remoteCrawler(commObj):
       score = self.score(page.PlainText)
       self.crawled.append(url)
       if score > 0:
-        self.results.append((url,score))
+        self.results[url] = score
       return
     
     except:
@@ -161,11 +192,11 @@ class remoteCrawler(commObj):
         score =  self.score(page.HTML)
         self.crawled.append(url)
         if score > 0:
-          self.results.append((url,score))
+          self.results[url] = score
 
         return
 
-      except Exception as e:
+      except Exception as e: # this is also a place where we might handle errors someday
         self.errors.append(e)
         return
 
@@ -175,9 +206,10 @@ class remoteCrawler(commObj):
     # and slap them into our frontier
     addr = termList.pop()
     for i in termList:
-      if i:
+      if i and i not in self.frontier:
         self.frontier.append(i)
-  
+    self.req_pending = False  
+
   def getSearchTerms(self,termList):
     # get search terms that we requested 
     addr = termList.pop() 
@@ -192,9 +224,12 @@ class remoteCrawler(commObj):
       self.cache[page] += 1 
 
   def cleanCache(self):
+    todel = [] 
     for key in self.cache:
       self.cache[key] -= .5
-      if self.cache[key] <= 0: del self.cache[key] 
+      if self.cache[key] <= 0: todel.append(key)
+    for key in todel:
+      del self.cache[key] 
 
   
   def score(self,pageText):
@@ -224,6 +259,9 @@ class remoteCrawler(commObj):
     # newMaster.get the pertinent stuff
     pass 
 
+
+  
+  
   @enthread #enthreaded for testing purposes
   def startCrawl(self,*args):
     self.crawling = True
@@ -231,9 +269,10 @@ class remoteCrawler(commObj):
     while self.crawling:
       #cursory startCrawl
       #Very cursory!!!  
-      if len(self.crawled) > 20:
+      if self.crawled:
         self.sendList("CRAWLED",self.crawled)
         self.crawled = []
+
       if self.newLinks:
         for i in range(len(self.newLinks)-1):
           self.cachePage(self.newLinks[i]) # for testing
@@ -243,16 +282,17 @@ class remoteCrawler(commObj):
  
       if self.results:
           self.sendResults(self.results)
-          self.results = [] 
-      if len(self.frontier) < 3:
+          self.results = {}
+
+      if len(self.frontier) <= 3 and not self.req_pending:
         self.req("GTURL",self.masterIP,self.outPort)
-        time.sleep(4)
+        self.req_pending = True
       
       self.cleanCache() # also for testing 
       
       if self.frontier:
           print "going to sleep"
-          time.sleep(5)
+          time.sleep(3)
           print "waking up to crawl"
           self.crawl()
           print "done crawling" 
