@@ -50,7 +50,9 @@ class crawlMaster(commObj):
   def grantURLs(self,inList):
     addr = inList.pop()
 
-    if not self.frontier: 
+    if not self.frontier:
+      if time.time() - self.startTime > 300
+        self.finished.set() 
       #if the frontier is empty re-append the request to the queue
       self.req_queue.append(["GTURL",addr])
       time.sleep(1)
@@ -117,10 +119,12 @@ class crawlMaster(commObj):
 
   def end(self): # easy testing function 
     self.stopAll()
-    duration = startTime - time.time()
+    endTime = time.time()
+    duration =  endTime - self.startTime
     successRate = float(len(set(self.crawled)))/self.crawlCount
     print "Time elapsed: " , duration
-    print "success rate: " , successRate 
+    print "number crawled: " , len(self.crawled)
+    print "success rate: " , successRate*100 ,"%" 
 
   @enthread
   def getDone(self):
@@ -130,7 +134,7 @@ class crawlMaster(commObj):
   def begin(self, limit=250): # easy testing function
     self.limit = limit
     self.getDone()
-    startTime = time.time() 
+    self.startTime = time.time() 
     self.startAll()
 
 class remoteCrawler(commObj):   
