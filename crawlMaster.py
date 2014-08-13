@@ -22,7 +22,8 @@ class crawlMaster(commObj):
     self.crawlCount = 0
     self.inPort = port
     self.outPort = port +1
-    
+    self.finished = threading.Event()   
+ 
     self.commands = {
     "GTRESULTS":self.getResults,
     "GTURL":self.grantURLs,
@@ -95,11 +96,12 @@ class crawlMaster(commObj):
       if url not in self.inProgress:   
         if listStr != 'FRONTIER': 
           targetList.append(url)
-        else:
+        elif url not in self.crawled:
           targetList.add(url)
       # the list will need to be filtered for duplicates elsewhere. 
-      self.junk.append((listStr,url))    
-    
+      self.junk.append((listStr,url))   
+    if len(self.crawled) >= self.limit: # testing clause 
+      self.finished.set()
 
   def sendSearchTerms(self, arglist):
       #respond to a request for search terms
@@ -113,6 +115,23 @@ class crawlMaster(commObj):
         dictList.append(str(self.searchTerms[i]))
       self.req("GETSTERMS,"+','.join(dictList),crawlerAddr,self.outPort)
 
+  def end(self): # easy testing function 
+    self.stopAll()
+    duration = startTime - time.time()
+    successRate = float(len(set(self.crawled)))/self.crawlCount
+    print "Time elapsed: " , duration
+    print "success rate: " , successRate 
+
+  @enthread
+  def getDone(self):
+    self.finished.wait()
+    self.end()
+
+  def begin(self, limit=250): # easy testing function
+    self.limit = limit
+    self.getDone()
+    startTime = time.time() 
+    self.startAll()
 
 class remoteCrawler(commObj):   
   
@@ -129,7 +148,7 @@ class remoteCrawler(commObj):
     self.crawling = False
     self.req_pending = False
     self.errors = [] 
-    self.frontier = []
+    self.frontier = set()
     self.crawled = []
     self.newLinks = [] 
     self.results = {} # dictionary of urls w/ their score 
@@ -211,7 +230,7 @@ class remoteCrawler(commObj):
     addr = termList.pop()
     for i in termList:
       if i and i not in self.frontier:
-        self.frontier.append(i)
+        self.frontier.add(i)
     self.req_pending = False  
 
   def getSearchTerms(self,termList):
@@ -281,6 +300,9 @@ class remoteCrawler(commObj):
         for i in range(len(self.newLinks)-1):
           self.cachePage(self.newLinks[i]) # for testing
           self.newLinks[i] = self.newLinks[i].encode('ascii', 'xmlcharrefreplace')
+          if self.newLinks[i] in self.frontier:
+            self.newLinks.pop(i)
+
         self.sendList("FRONTIER",self.newLinks)
         self.newLinks = []
  

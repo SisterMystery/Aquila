@@ -6,6 +6,8 @@ tagList = [ "h1", "h2", "h3", "h4", "h5", "h6", "p", "a",
 
 packer = struct.Struct('!L') #packer to pack/unpack data for send/recv functions
 
+startTime = 0
+
 def enthread(func):
 		def threadedFunc(*argsLst):
 			t = threading.Thread(target=func, args=argsLst)
