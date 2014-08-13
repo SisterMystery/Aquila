@@ -16,7 +16,7 @@ class crawlMaster(commObj):
     self.crawlers = [] # this is mostly here for testing 
     self.results = {}
     self.junk = [] 
-    self.frontier = []
+    self.frontier = set()
     self.crawlers = [] # for testing 
     self.crawled = [] 
     self.crawlCount = 0
@@ -54,7 +54,7 @@ class crawlMaster(commObj):
       self.req_queue.append(["GTURL",addr])
       time.sleep(1)
       return
-
+    
     outList = [] 
     i = 0
     while self.frontier and i < 10: 
@@ -91,8 +91,12 @@ class crawlMaster(commObj):
            print "out of progress " , url
            self.inProgress.remove(url)
 
-    for url in inList:    
-      targetList.append(url)
+    for url in inList:
+      if url not in self.inProgress:   
+        if listStr != 'FRONTIER': 
+          targetList.append(url)
+        else:
+          targetList.add(url)
       # the list will need to be filtered for duplicates elsewhere. 
       self.junk.append((listStr,url))    
     
@@ -249,7 +253,7 @@ class remoteCrawler(commObj):
       dictList = []
       for i in self.results:
         dictList.append(i)
-        dictList.append(str(self.searchTerms[i]))
+        dictList.append(str(self.results[i]))
       self.req("GTRESULTS,"+','.join(dictList),self.masterIP,self.outPort)
 
 
@@ -284,7 +288,7 @@ class remoteCrawler(commObj):
           self.sendResults(self.results)
           self.results = {}
 
-      if len(self.frontier) <= 3 and not self.req_pending:
+      if not self.frontier and not self.req_pending:
         self.req("GTURL",self.masterIP,self.outPort)
         self.req_pending = True
       
