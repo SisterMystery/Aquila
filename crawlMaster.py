@@ -51,7 +51,7 @@ class crawlMaster(commObj):
     addr = inList.pop()
 
     if not self.frontier:
-      if time.time() - self.startTime > 300
+      if time.time() - self.startTime > 30:
         self.finished.set() 
       #if the frontier is empty re-append the request to the queue
       self.req_queue.append(["GTURL",addr])
@@ -121,7 +121,10 @@ class crawlMaster(commObj):
     self.stopAll()
     endTime = time.time()
     duration =  endTime - self.startTime
-    successRate = float(len(set(self.crawled)))/self.crawlCount
+    if self.crawlCount:
+      successRate = float(len(set(self.crawled)))/self.crawlCount
+    else:
+      successRate = 0 
     print "Time elapsed: " , duration
     print "number crawled: " , len(self.crawled)
     print "success rate: " , successRate*100 ,"%" 
@@ -156,6 +159,8 @@ class remoteCrawler(commObj):
     self.crawled = []
     self.newLinks = [] 
     self.results = {} # dictionary of urls w/ their score 
+    self.finished = threading.Event()
+    self.linkDump = set()
 
     self.commands = {
     "GETSTERMS":self.getSearchTerms,
@@ -194,39 +199,24 @@ class remoteCrawler(commObj):
     
     try:
       page = WebPage(url) #try downloading the page!
-      page.getLinks() # and ripping some links (w/  getContent("a"))
+      page.parse()
       for link in page.internalLinks:
+        print link
         if link != url and link not in self.frontier and link not in self.cache: 
               self.newLinks.append(link)
+      
+      for link in page.externalLinks:
+         self.linkDump.add(link)
       
     except Exception as e: #we'll actually handle some errors here one day
       self.errors.append(e)
       return
-
-    try:
-      #try to get and score the plaintext
-      page.getPlainText() 
-      score = self.score(page.PlainText)
-      self.crawled.append(url)
-      if score > 0:
-        self.results[url] = score
-      return
     
-    except:
-      try:
-        #if that failed just do it with the HTML 
-        page.getHTML()
-        score =  self.score(page.HTML)
-        self.crawled.append(url)
-        if score > 0:
-          self.results[url] = score
 
-        return
-
-      except Exception as e: # this is also a place where we might handle errors someday
-        self.errors.append(e)
-        return
-
+    score = self.score(page.plainText)
+    self.crawled.append(url)
+    if score < 0:
+      self.results[url] = score
 
   def getURLs(self,termList):
     # get the URLs that were sent as per a crawler request 
