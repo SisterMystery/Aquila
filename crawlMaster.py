@@ -161,6 +161,7 @@ class remoteCrawler(commObj):
     self.results = {} # dictionary of urls w/ their score 
     self.finished = threading.Event()
     self.linkDump = set()
+    self.linksByPages = [] 
 
     self.commands = {
     "GETSTERMS":self.getSearchTerms,
@@ -201,10 +202,11 @@ class remoteCrawler(commObj):
       page = WebPage(url) #try downloading the page!
       page.parse()
       for link in page.internalLinks:
-        print link
+        
         if link != url and link not in self.frontier and link not in self.cache: 
               self.newLinks.append(link)
-      
+        
+        
       for link in page.externalLinks:
          self.linkDump.add(link)
       
@@ -212,7 +214,7 @@ class remoteCrawler(commObj):
       self.errors.append(e)
       return
     
-
+    self.linksByPages.append((url,page.internalLinks[:],page.externalLinks[:]))
     score = self.score(page.plainText)
     self.crawled.append(url)
     if score < 0:
@@ -296,6 +298,7 @@ class remoteCrawler(commObj):
           self.newLinks[i] = self.newLinks[i].encode('ascii', 'xmlcharrefreplace')
           if self.newLinks[i] in self.frontier:
             self.newLinks.pop(i)
+      
 
         self.sendList("FRONTIER",self.newLinks)
         self.newLinks = []
